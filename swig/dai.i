@@ -12,10 +12,11 @@
 /* This file targets Swig version 2.0.1, but later versions should work
  * as well.
  *
- * Python is the target language, but support for Octave may be
- * reincorporated later, especially if someone with Octave experience
- * wants to contribute or Joris thinks it is important enough to have
- * Aubrey work on it.
+ * Python (version >= 2.6) is the target language, but older Pythons can
+ * be supported as requested.  Support for Octave may be reincorporated
+ * later, especially if someone with Octave experience wants to
+ * contribute or Joris thinks it is important enough to have Aubrey work
+ * on it.
  *
  * Example Swig command line (from this directory):
  *
@@ -30,6 +31,9 @@
 
 %module dai
 
+// Include documentation of full function signatures
+%feature("autodoc", "1");
+
 /* Include the following headers for compilation.  (Swig just inserts
  * the following block verbatim into the generated wrapper code, not the
  * API.)
@@ -41,11 +45,25 @@
 #include <dai/varset.h>
 %}
 
+/* Include Swig adaptors for STL data structures.  Hopefully it will
+ * help with a number of small problems and allow access to more of the
+ * library functionality (i.e. interact better with the
+ * functions/methods that take/return STL data structures).
+ */
+%include <std_vector.i>  // Needed for passing Python lists as std::vectors
+
 /* Ignore all C++ output operators because Python uses a different
  * output paradigm.  This ignores some potentially useful operators
  * (e.g. bool dai::SmallSet<T>::operator<<(const SmallSet & x) const),
  * but those can be included as needed.  (They would need to be renamed
  * anyway.)
+ *
+ * (I tried to limit ignoring operator<< to just the dai namespace
+ * and/or to declarations where the first argument is std::ostream&, but
+ * Swig won't do it despite indications in the manual that it should
+ * work.  (http://www.swig.org/Doc2.0/SWIG.html#SWIG_rename_ignore,
+ * http://www.swig.org/Doc2.0/SWIGPlus.html#SWIGPlus_ambiguity_resolution_renaming)
+ * Maybe related to bug 2218834?)
  */
 %ignore operator<<;
 
@@ -62,6 +80,14 @@
 
 // Bring class Var into the API
 %include <dai/var.h>
+
+// Var string representation
+%extend dai::Var {
+  %pythoncode {
+    def __repr__(self):
+        return 'Var({0}, {1})'.format(self.label(), self.states())
+  }
+}
 
 /****************************************
  * SmallSet<T>
@@ -90,8 +116,8 @@
  *
  * I have no clue why "operator==" works but "dai::operator==" does not,
  * especially given
- * http://www.swig.org/Doc2.0/SWIGPlus.html#SWIGPlus_nn17.  Maybe a bug
- * or a documentation version discrepancy (2.0.4 vs. 2.0.1).
+ * http://www.swig.org/Doc2.0/SWIGPlus.html#SWIGPlus_nn17.  Maybe
+ * related to bug 2218834?
  *
  * However, it appears that operators that are defined as members of a
  * class are preserved despite the global nature of the following
@@ -107,8 +133,18 @@
  */
 %include <dai/smallset.h>
 
-// Make the set comparison operators ignored above available as class members
 %extend dai::SmallSet {
+  /* Make a "Swig constructor" that will accept a Python list (via
+   * std:vector typemaps).  See
+   * http://www.swig.org/Doc2.0/SWIG.html#SWIG_adding_member_functions
+   * for more information.
+   */ 
+  SmallSet(const std::vector<T> & elements) {
+    dai::SmallSet<T> * set = new dai::SmallSet<T>(elements.begin(), elements.end(), elements.size());
+    return set;
+  }
+
+  // Make the set comparison operators ignored above available as class members
   bool operator==(const SmallSet & x) const {
     return (*$self) == x;
   }
@@ -120,22 +156,58 @@
   bool operator<(const SmallSet & x) const {
     return (*$self) < x;
   }
+
+  // Make SmallSet act a bit more like a Python set
+  %pythoncode {
+    __len__ = size
+    __contains__ = contains
+    add = insert
+    remove = erase
+  }
 }
 
-// Instantiate SmallSet as a set of integers
-%template(SmallSetInt) dai::SmallSet<size_t>;
+// Instantiate std::vector for use with SmallSetSizet
+%template(VectorSizet) std::vector<size_t>;
+
+// Make SmallSet.size() return an integer
+%apply size_t { std::vector<size_t>::size_type };
+
+// Instantiate SmallSet as a set of (positive) integers
+%template(SmallSetSizet) dai::SmallSet<size_t>;
 
 /****************************************
  * VarSet
  ****************************************/
 
+// Instantiate std::vector for use with _SmallSetVar (and VarSet)
+%template(VectorVar) std::vector<dai::Var>;
+
+// Make SmallSet.size() return an integer
+%apply size_t { std::vector<dai::Var>::size_type };
+// Make VarSet.nrStates() return a float
+%apply double { long double };
+
 /* The following template is needed for Swig to know about
  * SmallSet<Var>, but it does not need to be included in the API because
- * VarSet supersedes it.  (By giving it an empty template name, Swig
- * leaves it out of the API.)
+ * VarSet supersedes it.  Use a leading underscore to indicate that the
+ * class is private to the module.  I tried leaving the name out,
+ * whereby Swig leaves it out of the API, but that broke inheritance in
+ * Python (VarSet was not a SmallSet).
  */
-%template() dai::SmallSet<dai::Var>;
+%template(_SmallSetVar) dai::SmallSet<dai::Var>;
 %include <dai/varset.h>
+
+%extend dai::VarSet {
+  /* Make a "Swig constructor" that will accept a Python list (via
+   * std:vector typemaps).
+   */ 
+  VarSet(const std::vector<dai::Var> & elements) {
+    dai::SmallSet<dai::Var> * set = new dai::SmallSet<dai::Var>(elements.begin(), elements.end(), elements.size());
+    dai::VarSet * varset = new dai::VarSet(*set);
+    delete set;
+    return varset;
+  }
+}
 
 
 
