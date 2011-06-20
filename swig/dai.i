@@ -109,15 +109,15 @@
 
 // Make the set comparison operators ignored above available as class members
 %extend dai::SmallSet {
-  SmallSet operator==(const SmallSet & x) const {
+  bool operator==(const SmallSet & x) const {
     return (*$self) == x;
   }
 
-  SmallSet operator!=(const SmallSet & x) const {
+  bool operator!=(const SmallSet & x) const {
     return (*$self) != x;
   }
 
-  SmallSet operator<(const SmallSet & x) const {
+  bool operator<(const SmallSet & x) const {
     return (*$self) < x;
   }
 }
