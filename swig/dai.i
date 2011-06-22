@@ -29,6 +29,13 @@
  * Swig and libDAI so that future use and maintenance is easier.
  */
 
+/*
+ * TODO handle dai::Exceptions
+ * TODO make instantiated vector types module-private? e.g. "_VectorVar" not "VectorVar"
+ * TODO enable TProb(Python sequence) constructor
+ * TODO see if there is a way to define the Python enums in terms of the C++ enum values
+ */
+
 %module dai
 
 // Include documentation of full function signatures
@@ -40,10 +47,31 @@
  */
 %header
 %{
+#include <dai/util.h>
 #include <dai/var.h>
 #include <dai/smallset.h>
 #include <dai/varset.h>
+#include <dai/prob.h>
+#include <dai/factor.h>
 %}
+
+/* Facilitate error handling for added C/C++ code.  Create a buffer for
+ * error messages used to initialize exceptions.  Bring in snprintf for
+ * assembling error messages.  (I considered using the more
+ * C++-appropriate stringstream to create each error message, but this
+ * approach will be more brief.)
+ */
+%{
+#include <cstdio>
+#include <string>
+
+#define DAISWIG_ERROR_MESSAGE_MAX_SIZE 256
+
+static char daiswig_error_message[DAISWIG_ERROR_MESSAGE_MAX_SIZE];
+%}
+
+// Evidently Swig doesn't define ssize_t by default so include it here
+typedef long ssize_t;
 
 /* Include Swig adaptors for STL data structures.  Hopefully it will
  * help with a number of small problems and allow access to more of the
@@ -51,6 +79,7 @@
  * functions/methods that take/return STL data structures).
  */
 %include <std_vector.i>  // Needed for passing Python lists as std::vectors
+%include <std_pair.i>  // Needed for TProb::argmax()
 
 /* Ignore all C++ output operators because Python uses a different
  * output paradigm.  This ignores some potentially useful operators
@@ -68,6 +97,38 @@
 %ignore operator<<;
 
 /****************************************
+ * Util, Exceptions
+ ****************************************
+ *
+ * Most of the contents of util.h aren't appropriate for inclusion into
+ * the API.  Just import it and manually (re)define the bits that are
+ * important to the API.
+ *
+ * Manually mirror exceptions.h because it will provide more idiomatic
+ * funcionality (no checking of codes, unified conversion of C++
+ * exceptions to Python exceptions).
+ */
+
+%import <dai/util.h>
+
+%pythoncode {
+class ProbNormType(object):
+    """Mirror of dai::ProbNormType enumeration."""
+    NORMPROB, NORMLINF = range(2)
+
+class ProbDistType(object):
+    """Mirror of dai::ProbDistType enumeration."""
+    DISTL1, DISTLINF, DISTTV, DISTKL, DISTHEL = range(5)
+
+class Exception(Exception):
+    """Base of all libDAI exceptions."""
+    pass
+
+class NotImplementedException(Exception):
+    pass
+}
+
+/****************************************
  * Var
  ****************************************/
 
@@ -78,7 +139,7 @@
 %ignore dai::Var::label();
 %ignore dai::Var::states();
 
-// Bring class Var into the API
+// Define class Var and bring it into the API
 %include <dai/var.h>
 
 // Var string representation
@@ -128,7 +189,7 @@
 %ignore operator!=;
 %ignore operator<;
 
-/* Bring in class SmallSet.  However, since it is a template class, it
+/* Define class SmallSet.  However, since it is a template class, it
  * must be instantiated before Swig includes it in the API.
  */
 %include <dai/smallset.h>
@@ -195,6 +256,7 @@
  * Python (VarSet was not a SmallSet).
  */
 %template(_SmallSetVar) dai::SmallSet<dai::Var>;
+// Define class VarSet and bring it into the API
 %include <dai/varset.h>
 
 %extend dai::VarSet {
@@ -208,6 +270,119 @@
     return varset;
   }
 }
+
+/****************************************
+ * Prob
+ ****************************************/
+
+// Ignore operators Python cannot handle directly
+%ignore dai::TProb::operator[];
+// Ignore mutable accessors (const versions are preserved)
+%ignore dai::TProb::p();
+// Ignore mutable iterators (const versions are preserved)
+%ignore dai::TProb::begin();
+%ignore dai::TProb::end();
+%ignore dai::TProb::rbegin();
+%ignore dai::TProb::rend();
+
+// Ignore functions involving operators
+%ignore dai::TProb::innerProduct;
+%ignore dai::TProb::accumulateSum;
+%ignore dai::TProb::accumulateMax;
+%ignore dai::TProb::pwUnaryTr;
+%ignore dai::TProb::pwUnaryOp;
+%ignore dai::TProb::pwBinaryTr;
+%ignore dai::TProb::pwBinaryOp;
+
+// Ignore get/set so they can be redefined with memory-safe versions
+%ignore dai::TProb::get;
+%ignore dai::TProb::set;
+
+// Define class TProb
+%include <dai/prob.h>
+
+// Handle exceptions from TProb::normalized
+//%exception dai::TProb::normalized {
+//  try {
+//    $action
+//  } catch (dai::Exception & e) {
+//
+//  }
+//}
+
+%extend dai::TProb {
+  /* Replace get/set with memory-safe versions.  It would be nice to be
+   * able to just redefine get/set in terms of std::vector::at but _p is
+   * private so we have to do things ourselves (the extensions appear in
+   * the scope of the API, not in the scope of the original C++ class).
+   * Don't name them with leading underscores or the Python help system
+   * will ignore them.
+   */
+  T get_(ssize_t index) const throw(std::out_of_range) {
+    if (index < 0 || index >= (ssize_t) $self->size()) {
+      // Assemble the error message
+      snprintf(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE, "Index out of range: %zd", index);
+      throw std::out_of_range(std::string(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE));
+    }
+    return $self->get(index);
+  }
+
+  void set_(ssize_t index, T value) throw(std::out_of_range) {
+    if (index < 0 || index >= (ssize_t) $self->size()) {
+      // Assemble the error message
+      snprintf(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE, "Index out of range: %zd", index);
+      throw std::out_of_range(std::string(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE));
+    }
+    $self->set(index, value);
+  }
+
+  /* Make operator[] available to Python as a convenience.  Define
+   * get/set to call the memory-safe versions.  Define __len__ for
+   * idiomatic behavior.
+   */
+  %pythoncode {
+    def __getitem__(self, index):
+        return self.get_(index)
+
+    def __setitem__(self, index, value):
+        self.set_(index, value)
+
+    __len__ = size
+    get = get_
+    set = set_
+  }
+}
+
+/* Instantiate std::vector<double> to enable the TProb(const
+ * std::vector<S> & v) constructor which will, in turn, enable TProb to
+ * be constructed from a Python sequence.  Use the name VectorFloat
+ * because "float" is idiomatic to Python.
+ */
+%template(VectorFloat) std::vector<dai::Real>;
+
+/* Instantiate std::pair<size_t, dai::Real> to enable an idiomatic
+ * return value for TProb::argmax().
+ */
+%template(PairSizetFloat) std::pair<size_t, dai::Real>;
+
+// Instantiate TProb for use with floating point numbers (includes it in the API)
+%template(Prob) dai::TProb<dai::Real>;
+
+/****************************************
+ * Factor
+ ****************************************/
+
+// Ignore operators Python cannot handle directly
+%ignore dai::TFactor::operator[];
+// Ignore mutable accessors (const versions are preserved)
+%ignore dai::TFactor::p();
+%ignore dai::TFactor::vars();
+
+// Define class TFactor
+%include <dai/factor.h>
+
+
+%template(Factor) dai::TFactor<dai::Real>;
 
 
 
