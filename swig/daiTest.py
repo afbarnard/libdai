@@ -37,27 +37,33 @@ class VarTest(unittest.TestCase):
         self.assertEqual(5, self.vars[0].states())
         self.assertEqual(6, self.vars[1].states())
 
-    def test_operatorLess(self):
+    def test___lt__(self):
+        """operator<"""
         self.assertLess(self.vars[0], self.vars[1])
 
-    def test_operatorGreater(self):
+    def test___gt__(self):
+        """operator>"""
         self.assertGreater(self.vars[1], self.vars[0])
 
-    def test_operatorLessEqual(self):
+    def test___le__(self):
+        """operator<="""
         self.assertLessEqual(self.vars[0], self.vars[1])
         self.assertLessEqual(self.vars[0], dai.Var(0, 5))
 
-    def test_operatorGreaterEqual(self):
+    def test___ge__(self):
+        """operator>="""
         self.assertGreaterEqual(self.vars[1], self.vars[0])
         self.assertGreaterEqual(self.vars[1], dai.Var(1, 6))
 
-    def test_operatorEqual(self):
+    def test___eq__(self):
+        """operator=="""
         self.assertEqual(self.vars[0], dai.Var(0, 5))
 
-    def test_operatorNotEqual(self):
+    def test___ne__(self):
+        """operator!="""
         self.assertNotEqual(self.vars[0], self.vars[1])
 
-    def test_repr(self):
+    def test___repr__(self):
         self.assertEqual('Var(0, 5)', repr(self.vars[0]))
 
 
@@ -81,6 +87,33 @@ class SmallSetSizetTest(unittest.TestCase):
             self.sets[index] = None
         self.sets = None
 
+    def test_insert(self):
+        self.sets[0].insert(67)
+        self.assertEqual(1, self.sets[0].size())
+        self.assertTrue(self.sets[0].contains(67))
+
+    def test_erase(self):
+        self.sets[1].erase(4)
+        self.assertEqual(1, self.sets[1].size())
+        self.assertFalse(self.sets[1].contains(4))
+
+    def test_intersects(self):
+        self.assertTrue(self.sets[1].intersects(self.sets[1]))
+        self.assertTrue(self.sets[1].intersects(self.sets[2]))
+        self.assertFalse(self.sets[1].intersects(self.sets[0]))
+
+    def test_contains(self):
+        self.assertTrue(self.sets[1].contains(23))
+        self.assertFalse(self.sets[1].contains(24))
+        self.assertTrue(self.sets[2].contains(7))
+        self.assertFalse(self.sets[2].contains(17))
+
+    def test___contains__(self):
+        self.assertTrue(23 in self.sets[1])
+        self.assertFalse(24 in self.sets[1])
+        self.assertTrue(self.sets[2].contains(7))
+        self.assertFalse(self.sets[2].contains(17))
+
     def test_size(self):
         self.assertEqual(0, self.sets[0].size())
         self.assertEqual(2, self.sets[1].size())
@@ -96,54 +129,74 @@ class SmallSetSizetTest(unittest.TestCase):
         self.assertFalse(self.sets[1].empty())
         self.assertFalse(self.sets[2].empty())
 
-    def test_elements(self):
-        self.assertEqual((), self.sets[0].elements())
-        self.assertEqual((4, 23), self.sets[1].elements())
-        self.assertEqual(tuple(xrange(10)), self.sets[2].elements())
-
     def test___nonzero__(self):
         self.assertFalse(self.sets[0])
         self.assertTrue(self.sets[1])
         self.assertTrue(self.sets[2])
 
-    def test_contains(self):
-        self.assertTrue(self.sets[1].contains(23))
-        self.assertFalse(self.sets[1].contains(24))
-        self.assertTrue(self.sets[2].contains(7))
-        self.assertFalse(self.sets[2].contains(17))
+    def test_elements(self):
+        self.assertEqual((), self.sets[0].elements())
+        self.assertEqual((4, 23), self.sets[1].elements())
+        self.assertEqual(tuple(xrange(10)), self.sets[2].elements())
 
-    def test___contains__(self):
-        self.assertTrue(23 in self.sets[1])
-        self.assertFalse(24 in self.sets[1])
-        self.assertTrue(self.sets[2].contains(7))
-        self.assertFalse(self.sets[2].contains(17))
+    def test_front(self):
+        self.assertEqual(4, self.sets[1].front())
 
-    def test_intersects(self):
-        self.assertTrue(self.sets[1].intersects(self.sets[1]))
-        self.assertTrue(self.sets[1].intersects(self.sets[2]))
-        self.assertFalse(self.sets[1].intersects(self.sets[0]))
+    def test_back(self):
+        self.assertEqual(9, self.sets[2].back())
 
-    def test_insert(self):
-        self.sets[0].insert(67)
-        self.assertEqual(1, self.sets[0].size())
-        self.assertTrue(self.sets[0].contains(67))
-
-    def test_erase(self):
-        self.sets[1].erase(4)
-        self.assertEqual(1, self.sets[1].size())
-        self.assertFalse(self.sets[1].contains(4))
-
-    def test_operatorEqual(self):
+    def test___eq__(self):
+        """operator=="""
         self.assertEqual(self.sets[1], dai.SmallSetSizet(4, 23))
 
-    def test_operatorNotEqual(self):
+    def test___ne__(self):
+        """operator!="""
         self.assertNotEqual(self.sets[0], self.sets[1])
 
-    def test_operatorLess(self):
+    def test___lt__(self):
+        """operator<"""
         # Lexicographic ordering (length not considered)
         self.assertLess(self.sets[0], self.sets[2])
         self.assertLess(self.sets[0], self.sets[1])
         self.assertLess(self.sets[2], self.sets[1])
+
+    def test___div__(self):
+        """operator/"""
+        result = self.sets[1] / self.sets[2]
+        self.assertEqual(dai.SmallSetSizet(23), result)
+
+    def test___or__(self):
+        """operator|"""
+        result = self.sets[1] | self.sets[0]
+        self.assertEqual(self.sets[1], result)
+
+    def test___and__(self):
+        """operator&"""
+        result = self.sets[1] & self.sets[2]
+        self.assertEqual(dai.SmallSetSizet(4), result)
+
+    def test___idiv__(self):
+        """operator/="""
+        self.sets[1] /= self.sets[2]
+        self.assertEqual(dai.SmallSetSizet(23), self.sets[1])
+
+    def test___ior__(self):
+        """operator|="""
+        self.sets[1] |= self.sets[0]
+        self.assertEqual(dai.SmallSetSizet(23, 4), self.sets[1])
+
+    def test___iand__(self):
+        """operator&="""
+        self.sets[1] &= self.sets[2]
+        self.assertEqual(dai.SmallSetSizet(4), self.sets[1])
+
+    def test___lshift__(self):
+        """operator<<"""
+        self.assertTrue(self.sets[0] << self.sets[1])
+
+    def test___rshift__(self):
+        """operator>>"""
+        self.assertTrue(self.sets[1] >> self.sets[0])
 
 
 class VarSetTest(unittest.TestCase):
@@ -176,6 +229,12 @@ class VarSetTest(unittest.TestCase):
 
 class ProbTest(unittest.TestCase):
 
+    contents = (0.2,) * 5
+    ones = (1.0,) * 5
+    zeros = (0.0,) * 5
+    logContents = tuple(math.log(value) for value in contents)
+    expContents = tuple(math.exp(value) for value in contents)
+
     def setUp(self):
         self.prob = dai.Prob(5)
 
@@ -183,7 +242,7 @@ class ProbTest(unittest.TestCase):
         self.prob = None
 
     def test_p(self):
-        self.assertEqual((0.2,) * 5, self.prob.p())
+        self.assertEqual(ProbTest.contents, self.prob.p())
 
     def test_get_set(self):
         self.assertAlmostEqual(0.2, self.prob.get(3))
@@ -202,7 +261,7 @@ class ProbTest(unittest.TestCase):
         with self.assertRaises(IndexError):
             self.prob.set(5, 0.5)
 
-    def test_operatorIndex(self):
+    def test___getitem_____setitem__(self):
         self.assertAlmostEqual(0.2, self.prob[3])
         self.prob[3] = 2.45292
         self.assertAlmostEqual(2.45292, self.prob[3])
@@ -249,11 +308,11 @@ class ProbTest(unittest.TestCase):
         self.assertGreaterEqual(index, 0)
         self.assertLess(index, 5)
 
-    def test_operatorLess(self):
+    def test___lt__(self):
         other = dai.Prob(4)
         self.assertLess(self.prob, other)
 
-    def test_operatorEqual(self):
+    def test___eq__(self):
         other = dai.Prob(5)
         self.assertEqual(other, self.prob)
 
@@ -261,25 +320,121 @@ class ProbTest(unittest.TestCase):
         self.assertEqual((-0.2,) * 5, (-self.prob).p())
 
     def test_abs(self):
-        self.assertEqual((0.2,) * 5, self.prob.abs().p())
+        self.assertEqual(ProbTest.contents, self.prob.abs().p())
 
     def test_exp(self):
-        self.assertEqual((math.exp(0.2),) * 5, self.prob.exp().p())
+        self.assertEqual(ProbTest.expContents, self.prob.exp().p())
 
     def test_log(self):
-        self.assertEqual((math.log(0.2),) * 5, self.prob.log().p())
-        zeros = dai.Prob(3, 0.0)
-        self.assertEqual((0.0,) * 3, zeros.log(zero=True).p())
+        self.assertEqual(ProbTest.logContents, self.prob.log().p())
+        probZeros = dai.Prob(5, 0.0)
+        self.assertEqual(ProbTest.zeros, probZeros.log(zero=True).p())
 
     def test_inverse(self):
         self.assertEqual((5.0,) * 5, self.prob.inverse().p())
-        zeros = dai.Prob(3, 0.0)
-        self.assertEqual((0.0,) * 3, zeros.inverse(zero=True).p())
+        probZeros = dai.Prob(5, 0.0)
+        self.assertEqual(ProbTest.zeros, probZeros.inverse(zero=True).p())
 
     def test_normalized(self):
-        self.assertEqual((0.2,) * 5, self.prob.normalized(dai.ProbNormType.NORMPROB).p())
-        self.assertEqual((1.0,) * 5, self.prob.normalized(dai.ProbNormType.NORMLINF).p())
+        self.assertEqual(ProbTest.contents, self.prob.normalized(dai.ProbNormType.NORMPROB).p())
+        self.assertEqual(ProbTest.ones, self.prob.normalized(dai.ProbNormType.NORMLINF).p())
 
-    # TODO finish Prob tests
+    def test_randomize(self):
+        for num in self.prob.randomize().p():
+            self.assertGreaterEqual(num, 0.0)
+            self.assertLess(num, 1.0)
+
+    def test_setUniform(self):
+        self.prob.randomize()
+        self.assertEqual(ProbTest.contents, self.prob.setUniform().p())
+
+    def test_takeAbs(self):
+        self.assertEqual(ProbTest.contents, (-self.prob).takeAbs().p())
+
+    def test_takeAbs(self):
+        self.assertEqual(ProbTest.expContents, self.prob.takeExp().p())
+
+    def test_takeLog(self):
+        self.assertEqual(ProbTest.logContents, self.prob.takeLog().p())
+        probZeros = dai.Prob(5, 0.0)
+        self.assertEqual(ProbTest.zeros, probZeros.takeLog(zero=True).p())
+
+    def test_normalize(self):
+        self.prob.normalize(dai.ProbNormType.NORMPROB)
+        self.assertEqual(ProbTest.contents, self.prob.p())
+        self.prob.normalize(dai.ProbNormType.NORMLINF)
+        self.assertEqual(ProbTest.ones, self.prob.p())
+
+    def test_fill(self):
+        self.assertEqual(ProbTest.ones, self.prob.fill(1.0).p())
+
+    def test___add__(self):
+        """operator+"""
+        self.assertEqual(ProbTest.ones, (self.prob + 0.8).p())
+        self.assertEqual(ProbTest.ones, (self.prob + dai.Prob(5, 0.8)).p())
+
+    def test___sub__(self):
+        """operator-"""
+        self.assertEqual(ProbTest.zeros, (self.prob - 0.2).p())
+        self.assertEqual(ProbTest.zeros, (self.prob - dai.Prob(5, 0.2)).p())
+
+    def test___mul__(self):
+        """operator*"""
+        self.assertEqual(ProbTest.ones, (self.prob * 5.0).p())
+        self.assertEqual(ProbTest.ones, (self.prob * dai.Prob(5, 5.0)).p())
+
+    def test___div__(self):
+        """operator/"""
+        expected = (0.1,) * 5
+        self.assertEqual(expected, (self.prob / 2.0).p())
+        self.assertEqual(expected, (self.prob / dai.Prob(5, 2.0)).p())
+
+    def test___xor__(self):
+        """operator^"""
+        expected = (0.2 ** 2.0,) * 5
+        self.assertEqual(expected, (self.prob ^ 2.0).p())
+        self.assertEqual(expected, (self.prob ^ dai.Prob(5, 2.0)).p())
+
+    def test___iadd__(self):
+        """operator+="""
+        self.prob += 0.8
+        self.assertEqual(ProbTest.ones, self.prob.p())
+        self.prob += dai.Prob(5)
+        self.assertEqual((1.2,) * 5, self.prob.p())
+
+    def test___isub__(self):
+        """operator-="""
+        self.prob -= 0.2
+        self.assertEqual(ProbTest.zeros, self.prob.p())
+        self.prob -= dai.Prob(5)
+        self.assertEqual((-0.2,) * 5, self.prob.p())
+
+    def test___imul__(self):
+        """operator*="""
+        self.prob *= 5.0
+        self.assertEqual(ProbTest.ones, self.prob.p())
+        self.prob *= dai.Prob(5)
+        self.assertEqual(ProbTest.contents, self.prob.p())
+
+    def test___idiv__(self):
+        """operator/="""
+        self.prob /= 2.0
+        self.assertEqual((0.1,) * 5, self.prob.p())
+        self.prob /= dai.Prob(5)
+        self.assertEqual((0.5,) * 5, self.prob.p())
+
+    def test___ixor__(self):
+        """operator^="""
+        self.prob ^= 2.0
+        self.assertEqual((0.2 ** 2.0,) * 5, self.prob.p())
+        self.prob ^= dai.Prob(5)
+        self.assertEqual(((0.2 ** 2.0) ** 0.2,) * 5, self.prob.p())
+
+    def test_divided_by(self):
+        self.assertEqual(ProbTest.ones, self.prob.divided_by(dai.Prob(5)).p())
+        self.assertEqual(ProbTest.ones, self.prob.divided_by(dai.Prob(5)).p())
+
+    def test_divide(self):
+        self.assertEqual(ProbTest.ones, self.prob.divide(dai.Prob(5)).p())
 
 # TODO Factor tests
