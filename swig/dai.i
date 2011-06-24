@@ -25,6 +25,9 @@
  * This file is organized in rough order of prerequisites, that is, from
  * most basic to most advanced.
  *
+ * This file is written in C++ although portions have a more C-like
+ * style (e.g. when working with the Python C API).
+ *
  * Aubrey wishes to profusely comment this file with the how and why of
  * Swig and libDAI so that future use and maintenance is easier.
  */
@@ -34,6 +37,10 @@
  * TODO make instantiated vector types module-private? e.g. "_VectorVar" not "VectorVar"
  * TODO enable TProb(Python sequence) constructor
  * TODO see if there is a way to define the Python enums in terms of the C++ enum values
+ *
+ * For Joris to fix:
+ * TODO return type for VarSet::nrStates() should be size_t as it is for Factor
+ * TODO improve exception handling: there should be a descriptive message and a source function/method, not just an error code, file, and line (which are unhelpful to Python users or anybody who doesn't want to read the source)
  */
 
 %module dai
@@ -53,21 +60,6 @@
 #include <dai/varset.h>
 #include <dai/prob.h>
 #include <dai/factor.h>
-%}
-
-/* Facilitate error handling for added C/C++ code.  Create a buffer for
- * error messages used to initialize exceptions.  Bring in snprintf for
- * assembling error messages.  (I considered using the more
- * C++-appropriate stringstream to create each error message, but this
- * approach will be more brief.)
- */
-%{
-#include <cstdio>
-#include <string>
-
-#define DAISWIG_ERROR_MESSAGE_MAX_SIZE 256
-
-static char daiswig_error_message[DAISWIG_ERROR_MESSAGE_MAX_SIZE];
 %}
 
 // Evidently Swig doesn't define ssize_t by default so include it here
@@ -97,7 +89,218 @@ typedef long ssize_t;
 %ignore operator<<;
 
 /****************************************
- * Util, Exceptions
+ * Errors
+ ****************************************
+ *
+ * Facilitate error handling for added C/C++ code.  Create a buffer for
+ * error messages used to initialize exceptions.  Bring in snprintf for
+ * assembling error messages.  (I considered using the more
+ * C++-appropriate stringstream to create each error message, but this
+ * approach will be more brief.)
+ *
+ * Also facilitate handling C++ exceptions by providing access to
+ * exceptions in Python and providing conversion from C++ exceptions to
+ * Swig/Python exceptions.
+ */
+
+%{
+// Prerequisites for building error messages in C++
+#include <cstdio>
+#include <string>
+
+#include <dai/exceptions.h>
+
+// Buffer for building error messages.  Provides about 3 lines of text at 80 characters per line.
+#define DAISWIG_ERROR_MESSAGE_MAX_SIZE 256
+static char daiswig_error_message[DAISWIG_ERROR_MESSAGE_MAX_SIZE];
+
+/* Python exception type object used for creating DAI Exceptions.  Only
+ * access this through daiswig_getDaiExceptionType().
+ */
+static PyObject * daiswig_daiExceptionType = NULL;
+
+/* Retrieves the Python DAI exception type object and caches it (like
+ * lazy instantiation).  Returns a borrowed reference.  (Do not
+ * decrement!)  Returns NULL if there was an error.  (If it returns
+ * successfully once, it should return successfully from then on.)
+ */
+static PyObject * daiswig_getDaiExceptionType() {
+  printf("daiswig_getDaiExceptionType\n");
+  // Retrieve the type if it is not already available
+  if (daiswig_daiExceptionType == NULL) {
+    printf(" - Retrieving DaiException type\n");
+    PyObject * daiExceptionModuleName;
+    PyObject * daiExceptionModule;
+    PyObject * exceptionType;
+
+    daiExceptionModuleName = PyString_FromString("dai");  // new ref
+    if (!daiExceptionModuleName)
+      goto errorModuleName;
+
+    // Import the module of exceptions
+    daiExceptionModule = PyImport_Import(daiExceptionModuleName);  // new ref
+    if (!daiExceptionModule)
+      goto errorModule;
+
+    // Get the particular exception type
+    exceptionType = PyObject_GetAttrString(daiExceptionModule, "DaiException");  // new ref
+    if (!exceptionType)
+      goto errorExceptionType;
+    // Check that the type is OK and then cast it
+    if (PyType_Check(exceptionType)) {
+      daiswig_daiExceptionType = exceptionType;
+    } else {
+      PyErr_SetString(PyExc_SystemError, "_daiException.Exception is not a type object.");
+    }
+
+    // Clean up
+    // Do not decrement the reference to the exception type so it stays around for later use
+  errorExceptionType:
+    Py_DECREF(daiExceptionModule);
+  errorModule:
+    Py_DECREF(daiExceptionModuleName);
+  }
+ errorModuleName:
+  // Nothing to clean up if the module name failed
+
+  // Return the (newly) cached value
+  // The variable should be NULL in the event of an error (it is only set upon success)
+  return daiswig_daiExceptionType;
+}
+
+/* Convert a DAI exception to a Python exception and set the Python
+ * exception.
+ */
+static void daiswig_handleDaiException_Python(dai::Exception & e) {
+  printf("daiswig_handleDaiException_Python\n");
+  // TODO? A Python exception should not already exist at this point
+
+  // Assemble the basic information
+  const char * message = e.what();
+  PyObject * daiExceptionType = daiswig_getDaiExceptionType();  // borrowed ref, leave it alone
+  // Variables for handling an existing exception
+  PyObject * exceptionType;
+  PyObject * exceptionValue;
+  PyObject * exceptionTraceback;
+  PyObject * exceptionString = NULL;
+  const char * exceptionTypeName = "Exception";
+  const char * exceptionAsCString = "Error: Too many errors! The sky is falling!";
+
+  // If getting the DAI exception type object caused a problem create a message with both errors
+  if (!daiExceptionType) {
+    if (PyErr_Occurred()) {
+      // Get the existing exception
+      PyErr_Fetch(&exceptionType, &exceptionValue, &exceptionTraceback);
+      // Convert it to a string
+      if (exceptionValue) {
+	exceptionString = PyObject_Str(exceptionValue);
+	if (exceptionString)
+	  exceptionAsCString = PyString_AsString(exceptionString);
+      }
+      if (exceptionType) {
+	exceptionTypeName = ((PyTypeObject *) exceptionType)->tp_name;
+      }
+      // Restore the exception.  Let Python deal with it when the new error is raised.
+      PyErr_Restore(exceptionType, exceptionValue, exceptionTraceback);
+      // Create a joint message
+      snprintf(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE,
+	       "%s\n(Also, while trying to handle this:\n%s: %s)",
+	       e.what(), exceptionTypeName, exceptionAsCString);
+      message = daiswig_error_message;
+      Py_XDECREF(exceptionString);
+    }
+    daiExceptionType = PyExc_RuntimeError;
+  }
+  PyErr_SetString(daiExceptionType, message);
+}
+
+/* Handle DAI exceptions and all descendants of std::exception.  Just
+ * sets up the errors and returns nothing.
+ */
+static void daiswig_handleException(std::exception & exception) {
+  printf("daiswig_handleException\n");
+  printf(" - type name of exception passed in: %s\n - what: %s\n", typeid(exception).name(), exception.what());
+
+  try {
+    // Down cast the exception to its actual type so that the catch blocks will work
+    // (See if the cast will work by first casting to a pointer.)
+    if (dynamic_cast<dai::Exception *>(&exception))
+      throw dynamic_cast<dai::Exception &>(exception);
+    else if (dynamic_cast<std::invalid_argument *>(&exception))
+      throw dynamic_cast<std::invalid_argument &>(exception);
+    else if (dynamic_cast<std::domain_error *>(&exception))
+      throw dynamic_cast<std::domain_error &>(exception);
+    else if (dynamic_cast<std::overflow_error *>(&exception))
+      throw dynamic_cast<std::overflow_error &>(exception);
+    else if (dynamic_cast<std::out_of_range *>(&exception))
+      throw dynamic_cast<std::out_of_range &>(exception);
+    else if (dynamic_cast<std::length_error *>(&exception))
+      throw dynamic_cast<std::length_error &>(exception);
+    else if (dynamic_cast<std::runtime_error *>(&exception))
+      throw dynamic_cast<std::runtime_error &>(exception);
+    else
+      throw exception;
+  } catch (dai::Exception & e) {
+    printf(" - catch dai::Exception\n");
+    /* Future, language-specific versions can go here (with appropriate
+     * conditional compilation).  Or, maybe a single function could be
+     * defined by several language modules and the appropriate one
+     * linked in.
+     */
+    daiswig_handleDaiException_Python(e);
+  }
+  /* Below is a copy of Swig's default handling of standard exceptions.
+   * The SWIG_CATCH_STDEXCEPT doesn't work because this whole business
+   * is within % { % }.
+   */
+  catch (std::invalid_argument & e) {
+    printf(" - catch std::invalid_argument\n");
+    SWIG_exception(SWIG_ValueError, e.what());
+  } catch (std::domain_error & e) {
+    printf(" - catch std::domain_error\n");
+    SWIG_exception(SWIG_ValueError, e.what());
+  } catch (std::overflow_error & e) {
+    printf(" - catch std::overflow_error\n");
+    SWIG_exception(SWIG_OverflowError, e.what());
+  } catch (std::out_of_range & e) {
+    printf(" - catch std::out_of_range\n");
+    SWIG_exception(SWIG_IndexError, e.what());
+  } catch (std::length_error & e) {
+    printf(" - catch std::length_error\n");
+    SWIG_exception(SWIG_IndexError, e.what());
+  } catch (std::runtime_error & e) {
+    printf(" - catch std::runtime_error\n");
+    SWIG_exception(SWIG_RuntimeError, e.what());
+  } catch (std::exception & e) {
+    printf(" - catch std::exception\nwhat: %s\n", e.what());
+    SWIG_exception(SWIG_SystemError, e.what());
+  }
+  /* Swig's default handling of standard exceptions almost always
+   * includes "goto fail" (depending on the macro definition) so provide
+   * that label here.
+   */
+ fail:
+  return;
+}
+%}
+
+/* Global exception handler.  Keep this minimal to prevent code bloat
+ * (as it is added to every wrapper) and do the actual handling in a
+ * separate function.
+ */
+%exception {
+  try {
+    $action
+  } catch (std::exception & e) {
+    daiswig_handleException(e); SWIG_fail;
+    // Use SWIG_fail to fail in a language-independent way which is what SWIG_exception does.
+  } catch (...) {
+    SWIG_exception(SWIG_UnknownError, "daiswig: Error: Unknown exception.");
+  }
+}
+
+/****************************************
+ * Util, Exception, Python module header
  ****************************************
  *
  * Most of the contents of util.h aren't appropriate for inclusion into
@@ -120,11 +323,8 @@ class ProbDistType(object):
     """Mirror of dai::ProbDistType enumeration."""
     DISTL1, DISTLINF, DISTTV, DISTKL, DISTHEL = range(5)
 
-class Exception(Exception):
-    """Base of all libDAI exceptions."""
-    pass
-
-class NotImplementedException(Exception):
+class DaiException(Exception):
+    """Used for all libDAI exceptions."""
     pass
 }
 
@@ -301,15 +501,6 @@ class NotImplementedException(Exception):
 // Define class TProb
 %include <dai/prob.h>
 
-// Handle exceptions from TProb::normalized
-//%exception dai::TProb::normalized {
-//  try {
-//    $action
-//  } catch (dai::Exception & e) {
-//
-//  }
-//}
-
 %extend dai::TProb {
   /* Replace get/set with memory-safe versions.  It would be nice to be
    * able to just redefine get/set in terms of std::vector::at but _p is
@@ -318,7 +509,7 @@ class NotImplementedException(Exception):
    * Don't name them with leading underscores or the Python help system
    * will ignore them.
    */
-  T get_(ssize_t index) const throw(std::out_of_range) {
+  T get_(ssize_t index) const throw (std::out_of_range) {
     if (index < 0 || index >= (ssize_t) $self->size()) {
       // Assemble the error message
       snprintf(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE, "Index out of range: %zd", index);
@@ -327,7 +518,7 @@ class NotImplementedException(Exception):
     return $self->get(index);
   }
 
-  void set_(ssize_t index, T value) throw(std::out_of_range) {
+  void set_(ssize_t index, T value) throw (std::out_of_range) {
     if (index < 0 || index >= (ssize_t) $self->size()) {
       // Assemble the error message
       snprintf(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE, "Index out of range: %zd", index);

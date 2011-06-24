@@ -364,6 +364,8 @@ class ProbTest(unittest.TestCase):
         self.assertEqual(ProbTest.contents, self.prob.p())
         self.prob.normalize(dai.ProbNormType.NORMLINF)
         self.assertEqual(ProbTest.ones, self.prob.p())
+        with self.assertRaises(dai.DaiException):
+            dai.Prob(5, 0.0).normalize(dai.ProbNormType.NORMPROB)
 
     def test_fill(self):
         self.assertEqual(ProbTest.ones, self.prob.fill(1.0).p())
