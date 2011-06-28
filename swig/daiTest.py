@@ -15,6 +15,9 @@ import unittest
 import dai
 
 
+# TODO search for exceptions in the libdai code and make sure they are tested here
+
+
 class VarTest(unittest.TestCase):
 
     def setUp(self):
@@ -439,4 +442,242 @@ class ProbTest(unittest.TestCase):
     def test_divide(self):
         self.assertEqual(ProbTest.ones, self.prob.divide(dai.Prob(5)).p())
 
-# TODO Factor tests
+
+class FactorTest(unittest.TestCase):
+
+    variables = (dai.Var(0, 2), dai.Var(1, 3), dai.Var(2, 2))
+    weights = (
+        0.4040116576211261,
+        0.32198209047119,
+        0.33515583572520125,
+        0.9135364020130565,
+        0.7113655990119282,
+        0.6262398445807642,
+        0.170346393147352,
+        0.6992201467783292,
+        0.709298618691264,
+        0.8766663157670751,
+        0.49936843971042577,
+        0.1759180958572505,
+        )
+
+    def setUp(self):
+        self.factor = dai.Factor(FactorTest.variables, FactorTest.weights)
+
+    def tearDown(self):
+        self.factor = None
+
+    def test_get_set(self):
+        self.assertAlmostEqual(FactorTest.weights[6], self.factor.get(6))
+        newValue = 0.5946797807711529
+        self.factor.set(9, newValue)
+        self.assertAlmostEqual(newValue, self.factor.get(9))
+
+    def test_get_bounds(self):
+        with self.assertRaises(IndexError):
+            self.factor.get(-1)
+        with self.assertRaises(IndexError):
+            self.factor.get(len(FactorTest.weights))
+
+    def test_set_bounds(self):
+        with self.assertRaises(IndexError):
+            self.factor.set(-1, 0.5)
+        with self.assertRaises(IndexError):
+            self.factor.set(len(FactorTest.weights), 0.5)
+
+    def test___getitem_____setitem__(self):
+        self.assertAlmostEqual(FactorTest.weights[5], self.factor[5])
+        newValue = 0.6165876947020703
+        self.factor[0] = newValue
+        self.assertAlmostEqual(newValue, self.factor[0])
+
+    def test_p(self):
+        self.assertEqual(FactorTest.weights, self.factor.p().p())
+
+    def test_vars(self):
+        varset = dai.VarSet(FactorTest.variables)
+        self.assertEqual(varset, self.factor.vars())
+
+    def test_nrStates(self):
+        self.assertEqual(len(FactorTest.weights), self.factor.nrStates())
+
+    def test___len__(self):
+        self.assertEqual(len(FactorTest.weights), len(self.factor))
+
+    def test_entropy(self):
+        expected = -sum(p * math.log(p) for p in FactorTest.weights)
+        self.assertEqual(expected, self.factor.entropy())
+
+    def test_max(self):
+        self.assertEqual(max(FactorTest.weights), self.factor.max())
+
+    def test_min(self):
+        self.assertEqual(min(FactorTest.weights), self.factor.min())
+
+    def test_sum(self):
+        self.assertEqual(sum(FactorTest.weights), self.factor.sum())
+
+    def test_sumAbs(self):
+        self.assertEqual(sum(FactorTest.weights), self.factor.sumAbs())
+
+    def test_maxAbs(self):
+        self.assertEqual(max(FactorTest.weights), self.factor.maxAbs())
+
+    def test_hasNaNs(self):
+        self.assertFalse(self.factor.hasNaNs())
+        self.factor[3] = float('nan')
+        self.assertTrue(self.factor.hasNaNs())
+
+    def test_hasNegatives(self):
+        self.assertFalse(self.factor.hasNegatives())
+        self.factor[7] *= -1.0
+        self.assertTrue(self.factor.hasNegatives())
+
+    def test_strength(self):
+        self.assertAlmostEqual(
+            0.470954486151,
+            self.factor.strength(FactorTest.variables[2], FactorTest.variables[1]))
+
+    def test___eq__(self):
+        """operator=="""
+        other = dai.Factor(FactorTest.variables, FactorTest.weights)
+        self.assertEqual(self.factor, other)
+        other = dai.Factor(dai.VarSet(FactorTest.variables), 0.1)
+        self.assertNotEqual(self.factor, other)
+
+    # There is a problem with the following methods that return
+    # TFactor<T> by value.  It appears that Swig corrupts some memory
+    # when method calls are chained.  (The first element differs, but
+    # subsequent elements are equal.)  This only happens when the method
+    # calls are chained on a TFactor returned by value
+    # (e.g. '(-self.factor).p().p()') and not when the TFactor returned
+    # by value is assigned to a local variable (e.g. 'actual =
+    # -self.factor; actual.p().p()').  I'm not going to investigate this
+    # any further at this time.
+
+    def test___neg__(self):
+        """operator-"""
+        actual = -self.factor
+        self.assertEqual(dai.Factor, type(actual))
+        self.assertEqual(tuple(-w for w in FactorTest.weights), actual.p().p())
+
+    def test_abs(self):
+        actual = self.factor.abs()
+        self.assertEqual(FactorTest.weights, actual.p().p())
+
+    def test_exp(self):
+        actual = self.factor.exp()
+        self.assertEqual(tuple(math.exp(w) for w in FactorTest.weights), actual.p().p())
+
+    def test_log(self):
+        actual = self.factor.log()
+        self.assertEqual(tuple(math.log(w) for w in FactorTest.weights), actual.p().p())
+
+    def test_inverse(self):
+        actual = self.factor.inverse()
+        self.assertEqual(tuple(1.0 / w for w in FactorTest.weights), actual.p().p())
+
+    def test_normalized(self):
+        z = sum(FactorTest.weights)
+        actual = self.factor.normalized()
+        self.assertEqual(tuple(w / z for w in FactorTest.weights), actual.p().p())
+        z = max(FactorTest.weights)
+        actual = self.factor.normalized(dai.ProbNormType.NORMLINF)
+        self.assertEqual(tuple(w / z for w in FactorTest.weights), actual.p().p())
+
+    def test_randomize(self):
+        newWeights = self.factor.randomize().p().p()
+        self.assertNotEqual(FactorTest.weights, newWeights)
+        self.assertGreaterEqual(min(newWeights), 0.0)
+        self.assertLess(max(newWeights), 1.0)
+
+    def test_setUniform(self):
+        self.assertEqual((1.0 / len(FactorTest.weights),) * len(FactorTest.weights),
+                         self.factor.setUniform().p().p())
+
+    def test_takeAbs(self):
+        self.assertEqual(FactorTest.weights, self.factor.takeAbs().p().p())
+
+    def test_takeExp(self):
+        self.assertEqual(tuple(math.exp(w) for w in FactorTest.weights), self.factor.takeExp().p().p())
+
+    def test_takeLog(self):
+        self.assertEqual(tuple(math.log(w) for w in FactorTest.weights), self.factor.takeLog().p().p())
+
+    def test_normalize(self):
+        z = sum(FactorTest.weights)
+        newWeights = tuple(w / z for w in FactorTest.weights)
+        self.factor.normalize()
+        self.assertEqual(newWeights, self.factor.p().p())
+        z = max(newWeights)
+        self.factor.normalize(dai.ProbNormType.NORMLINF)
+        self.assertEqual(tuple(w / z for w in newWeights), self.factor.p().p())
+
+    def test_fill(self):
+        self.assertEqual((1.03,) * len(FactorTest.weights), self.factor.fill(1.03).p().p())
+
+    def test___add__(self):
+        """operator+"""
+        actual = self.factor + 0.8
+        self.assertEqual(tuple(w + 0.8 for w in FactorTest.weights), actual.p().p())
+
+    def test___sub__(self):
+        """operator-"""
+        actual = self.factor - 0.68
+        self.assertEqual(tuple(w - 0.68 for w in FactorTest.weights), actual.p().p())
+
+    def test___mul__(self):
+        """operator*"""
+        actual = self.factor * 0.6
+        self.assertEqual(tuple(w * 0.6 for w in FactorTest.weights), actual.p().p())
+
+    def test___div__(self):
+        """operator/"""
+        actual = self.factor / 0.617
+        self.assertEqual(tuple(w / 0.617 for w in FactorTest.weights), actual.p().p())
+
+    def test___xor__(self):
+        """operator^"""
+        actual = self.factor ^ 4.2
+        self.assertEqual(tuple(w ** 4.2 for w in FactorTest.weights), actual.p().p())
+
+    def test___iadd__(self):
+        """operator+="""
+        self.factor += 0.8
+        self.assertEqual(tuple(w + 0.8 for w in FactorTest.weights), self.factor.p().p())
+
+    def test___isub__(self):
+        """operator-="""
+        self.factor -= 0.58
+        self.assertEqual(tuple(w - 0.58 for w in FactorTest.weights), self.factor.p().p())
+
+    def test___imul__(self):
+        """operator*="""
+        self.factor *= 0.02
+        self.assertEqual(tuple(w * 0.02 for w in FactorTest.weights), self.factor.p().p())
+
+    def test___idiv__(self):
+        """operator/="""
+        self.factor /= 0.04
+        self.assertEqual(tuple(w / 0.04 for w in FactorTest.weights), self.factor.p().p())
+
+    def test___ixor__(self):
+        """operator^="""
+        self.factor ^= 0.93
+        self.assertEqual(tuple(w ** 0.93 for w in FactorTest.weights), self.factor.p().p())
+
+    @unittest.expectedFailure
+    def test_slice(self):
+        self.fail('TODO: Understand this method and test it.')
+
+    @unittest.expectedFailure
+    def test_embed(self):
+        self.fail('TODO: Understand this method and test it.')
+
+    @unittest.expectedFailure
+    def test_marginal(self):
+        self.fail('TODO: Understand this method and test it.')
+
+    @unittest.expectedFailure
+    def test_maxMarginal(self):
+        self.fail('TODO: Understand this method and test it.')

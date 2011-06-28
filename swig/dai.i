@@ -569,10 +569,56 @@ class DaiException(Exception):
 %ignore dai::TFactor::p();
 %ignore dai::TFactor::vars();
 
+// Ignore functions involving operators
+%ignore dai::TFactor::binaryOp;
+%ignore dai::TFactor::binaryTr;
+
+// Ignore get/set so they can be redefined with memory-safe versions
+%ignore dai::TFactor::get;
+%ignore dai::TFactor::set;
+
 // Define class TFactor
 %include <dai/factor.h>
 
+%extend dai::TFactor {
+  /* Replace get/set with memory-safe versions as for TProb.
+   */
+  T get_(ssize_t index) const throw (std::out_of_range) {
+    if (index < 0 || index >= (ssize_t) $self->nrStates()) {
+      // Assemble the error message
+      snprintf(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE, "Index out of range: %zd", index);
+      throw std::out_of_range(std::string(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE));
+    }
+    return $self->get(index);
+  }
 
+  void set_(ssize_t index, T value) throw (std::out_of_range) {
+    if (index < 0 || index >= (ssize_t) $self->nrStates()) {
+      // Assemble the error message
+      snprintf(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE, "Index out of range: %zd", index);
+      throw std::out_of_range(std::string(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE));
+    }
+    $self->set(index, value);
+  }
+
+  /* Make operator[] available to Python as a convenience.  Define
+   * get/set to call the memory-safe versions.  Define __len__ for
+   * idiomatic behavior.
+   */
+  %pythoncode {
+    def __getitem__(self, index):
+        return self.get_(index)
+
+    def __setitem__(self, index, value):
+        self.set_(index, value)
+
+    __len__ = nrStates
+    get = get_
+    set = set_
+  }
+}
+
+// Instantiate TFactor for use with floating point numbers (includes it in the API)
 %template(Factor) dai::TFactor<dai::Real>;
 
 
