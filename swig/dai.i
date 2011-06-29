@@ -60,6 +60,10 @@
 #include <dai/varset.h>
 #include <dai/prob.h>
 #include <dai/factor.h>
+#include <dai/graph.h>
+#include <dai/bipgraph.h>
+#include <dai/factorgraph.h>
+#include <dai/properties.h>
 %}
 
 // Evidently Swig doesn't define ssize_t by default so include it here
@@ -359,11 +363,10 @@ class DaiException(Exception):
  * factorgraph.h, and graph.h where it is always SmallSet<size_t>.
  */
 
-// Ignore mutable accessors (const versions are preserved)
+// Ignore mutators (accessors (const versions) are preserved)
 %ignore dai::SmallSet::elements();
 %ignore dai::SmallSet::front();
 %ignore dai::SmallSet::back();
-// Ignore mutable iterators (const versions are preserved)
 %ignore dai::SmallSet::begin();
 %ignore dai::SmallSet::end();
 %ignore dai::SmallSet::rbegin();
@@ -477,9 +480,8 @@ class DaiException(Exception):
 
 // Ignore operators Python cannot handle directly
 %ignore dai::TProb::operator[];
-// Ignore mutable accessors (const versions are preserved)
+// Ignore mutators (accessors (const versions) are preserved)
 %ignore dai::TProb::p();
-// Ignore mutable iterators (const versions are preserved)
 %ignore dai::TProb::begin();
 %ignore dai::TProb::end();
 %ignore dai::TProb::rbegin();
@@ -565,7 +567,7 @@ class DaiException(Exception):
 
 // Ignore operators Python cannot handle directly
 %ignore dai::TFactor::operator[];
-// Ignore mutable accessors (const versions are preserved)
+// Ignore mutators (accessors (const versions) are preserved)
 %ignore dai::TFactor::p();
 %ignore dai::TFactor::vars();
 
@@ -620,6 +622,50 @@ class DaiException(Exception):
 
 // Instantiate TFactor for use with floating point numbers (includes it in the API)
 %template(Factor) dai::TFactor<dai::Real>;
+
+/****************************************
+ * Neighbor, Neighbors, Edge, GraphAL
+ ****************************************/
+
+// Ignore casting operators
+%ignore dai::Neighbor::operator size_t;
+// Ignore mutators (accessors (const versions) are preserved)
+%ignore dai::GraphAL::nb;
+
+// Define struct Neighbor, type Neighbors, type Edge, class GraphAL
+%include <dai/graph.h>
+
+/****************************************
+ * BipartiteGraph
+ ****************************************/
+
+// Ignore mutators (accessors (const versions) are preserved)
+%ignore dai::BipartiteGraph::nb1;
+%ignore dai::BipartiteGraph::nb2;
+
+// Define class BipartiteGraph
+%include <dai/bipgraph.h>
+
+/****************************************
+ * Factor Graph
+ ****************************************/
+
+// Ignore operators Python cannot handle directly
+%ignore operator>>;
+
+// Define class FactorGraph
+%include <dai/factorgraph.h>
+
+/****************************************
+ * Property, PropertySet
+ ****************************************/
+
+// Ignore getting as certain types
+%ignore dai::PropertySet::getAs;
+%ignore dai::PropertySet::getStringAs;
+
+// Define type PropertyKey, type PropertyValue, type Property, class PropertySet
+%include <dai/properties.h>
 
 
 
