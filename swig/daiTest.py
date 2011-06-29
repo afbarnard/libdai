@@ -666,18 +666,71 @@ class FactorTest(unittest.TestCase):
         self.factor ^= 0.93
         self.assertEqual(tuple(w ** 0.93 for w in FactorTest.weights), self.factor.p().p())
 
-    @unittest.expectedFailure
     def test_slice(self):
-        self.fail('TODO: Understand this method and test it.')
+        """Factor.slice returns a new factor obtained by including those
+        values where the variables in the given VarSet are in the given
+        state (and excluding all other values).  No summing out or other
+        manipulation is done.
+        """
+        # Create a factor where variable 1 is set to 1
+        actual = self.factor.slice(dai.VarSet(FactorTest.variables[1]), 1)
+        states = ((0, 1, 0), (1, 1, 0), (0, 1, 1), (1, 1, 1))
+        indices = tuple(state[0] + state[1] * 2 + state[2] * 3 * 2 for state in states)
+        expected = tuple(FactorTest.weights[i] for i in indices)
+        self.assertEqual(expected, actual.p().p())
+        # Create a factor where variable 0 is set to 0
+        actual = self.factor.slice(dai.VarSet(FactorTest.variables[0]), 0)
+        states = ((0, 0, 0), (0, 1, 0), (0, 2, 0), (0, 0, 1), (0, 1, 1), (0, 2, 1))
+        indices = tuple(state[0] + state[1] * 2 + state[2] * 3 * 2 for state in states)
+        expected = tuple(FactorTest.weights[i] for i in indices)
+        self.assertEqual(expected, actual.p().p())
 
-    @unittest.expectedFailure
     def test_embed(self):
-        self.fail('TODO: Understand this method and test it.')
+        """Factor.embed does a factor multiplication (the same as the
+        product in the sum-product algorithm) of the original factor and
+        a factor for the given (new) variables consisting entirely of
+        ones.  This effectively repeats the values in the original
+        factor enough to fill the new (larger) factor.
+        """
+        moreVariables = FactorTest.variables + (dai.Var(3, 2),)
+        actual = self.factor.embed(dai.VarSet(moreVariables))
+        expected = FactorTest.weights * 2
+        self.assertEqual(expected, actual.p().p())
 
-    @unittest.expectedFailure
     def test_marginal(self):
-        self.fail('TODO: Understand this method and test it.')
+        """Factor.marginal just sums out the variables not in the given
+        set of variables.
+        """
+        # Sum out variable 1 (include variables 0, 2)
+        actual = self.factor.marginal(dai.VarSet(FactorTest.variables[0], FactorTest.variables[2]), False)
+        # States and sum for var0=0, var2=0
+        states = ((0, 0, 0), (0, 1, 0), (0, 2, 0))
+        sum00 = sum(FactorTest.weights[state[0] + state[1] * 2 + state[2] * 3 * 2] for state in states)
+        # States and sum for var0=1, var2=0
+        states = ((1, 0, 0), (1, 1, 0), (1, 2, 0))
+        sum10 = sum(FactorTest.weights[state[0] + state[1] * 2 + state[2] * 3 * 2] for state in states)
+        states = ((0, 0, 1), (0, 1, 1), (0, 2, 1))
+        sum01 = sum(FactorTest.weights[state[0] + state[1] * 2 + state[2] * 3 * 2] for state in states)
+        states = ((1, 0, 1), (1, 1, 1), (1, 2, 1))
+        sum11 = sum(FactorTest.weights[state[0] + state[1] * 2 + state[2] * 3 * 2] for state in states)
+        expected = (sum00, sum10, sum01, sum11)
+        self.assertEqual(expected, actual.p().p())
 
-    @unittest.expectedFailure
     def test_maxMarginal(self):
-        self.fail('TODO: Understand this method and test it.')
+        """Factor.maxMarginal operates just like Factor.marginal except
+        that summing is replaced by finding the maximum.
+        """
+        # "Max" out variable 1 (include variables 0, 2)
+        actual = self.factor.maxMarginal(dai.VarSet(FactorTest.variables[0], FactorTest.variables[2]), False)
+        # States and max for var0=0, var2=0
+        states = ((0, 0, 0), (0, 1, 0), (0, 2, 0))
+        max00 = max(FactorTest.weights[state[0] + state[1] * 2 + state[2] * 3 * 2] for state in states)
+        # States and max for var0=1, var2=0
+        states = ((1, 0, 0), (1, 1, 0), (1, 2, 0))
+        max10 = max(FactorTest.weights[state[0] + state[1] * 2 + state[2] * 3 * 2] for state in states)
+        states = ((0, 0, 1), (0, 1, 1), (0, 2, 1))
+        max01 = max(FactorTest.weights[state[0] + state[1] * 2 + state[2] * 3 * 2] for state in states)
+        states = ((1, 0, 1), (1, 1, 1), (1, 2, 1))
+        max11 = max(FactorTest.weights[state[0] + state[1] * 2 + state[2] * 3 * 2] for state in states)
+        expected = (max00, max10, max01, max11)
+        self.assertEqual(expected, actual.p().p())
