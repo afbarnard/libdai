@@ -37,10 +37,12 @@
  * TODO make instantiated vector types module-private? e.g. "_VectorVar" not "VectorVar"
  * TODO enable TProb(Python sequence) constructor
  * TODO see if there is a way to define the Python enums in terms of the C++ enum values
+ * TODO check that %newobject is applied where needed (and its relation to return by value)
  *
  * For Joris to fix:
  * TODO return type for VarSet::nrStates() should be size_t as it is for Factor
  * TODO improve exception handling: there should be a descriptive message and a source function/method, not just an error code, file, and line (which are unhelpful to Python users or anybody who doesn't want to read the source)
+ * TODO create function listInfAlgs which lists the names of the available inference algorithms (this would basically be reverting commit 8aaf91cb3d63f92034fd7dc30669b635a4dbbe4d (2010-10-04 03:40:52) -- but do it in a better way?)
  */
 
 %module dai
@@ -64,6 +66,8 @@
 #include <dai/bipgraph.h>
 #include <dai/factorgraph.h>
 #include <dai/properties.h>
+#include <dai/daialg.h>
+#include <dai/alldai.h>
 %}
 
 // Evidently Swig doesn't define ssize_t by default so include it here
@@ -653,6 +657,12 @@ class DaiException(Exception):
 // Ignore operators Python cannot handle directly
 %ignore operator>>;
 
+/* Instantiate std::vector<dai::Factor> to enable the FactorGraph(const
+ * std::vector<Factor> & P) constructor which will, in turn, enable
+ * FactorGraph to be constructed from a Python sequence.
+ */
+%template(VectorFactor) std::vector<dai::Factor>;
+
 // Define class FactorGraph
 %include <dai/factorgraph.h>
 
@@ -664,8 +674,49 @@ class DaiException(Exception):
 %ignore dai::PropertySet::getAs;
 %ignore dai::PropertySet::getStringAs;
 
+// Ignore the warning that PropertySet uses private inheritance
+%warnfilter(309) dai::PropertySet;  // It doesn't work.  Same problems as above with %ignore?
+
 // Define type PropertyKey, type PropertyValue, type Property, class PropertySet
 %include <dai/properties.h>
+
+/****************************************
+ * InfAlg, DAIAlg
+ ****************************************
+ *
+ * Eventually the specific inference algorithm classes may need to be
+ * added to the API.  However, for now the factory functions newInfAlg*
+ * (from alldai.h, defined below) should be sufficient.
+ */
+
+// Ignore mutators (accessors (const versions) are preserved)
+%ignore dai::InfAlg::fg;
+
+// Define class InfAlg, class DAIAlg
+%include <dai/daialg.h>
+
+/****************************************
+ * All DAI (newInfAlg*)
+ ****************************************/
+
+// Functions to leave out of the API
+%ignore dai::parseNameProperties;
+%ignore dai::readAliasesFile;
+
+// Tell Swig that newInfAlg, newInfAlgFromString are factory functions
+%newobject dai::newInfAlg;
+%newobject dai::newInfAlgFromString;
+
+/* Make sets of strings available to Python to enable an idiomatic
+ * return value from listInfArgs.  Both of the includes (string, set)
+ * and the template are necessary.
+ */
+%include "std_string.i"
+%include "std_set.i"
+%template(SetString) std::set<std::string>;
+
+// Define functions listInfAlgs, newInfAlg*
+%include <dai/alldai.h>
 
 
 
