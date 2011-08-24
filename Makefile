@@ -1,11 +1,8 @@
 # This file is part of libDAI - http://www.libdai.org/
 #
-# libDAI is licensed under the terms of the GNU General Public License version
-# 2, or (at your option) any later version. libDAI is distributed without any
-# warranty. See the file COPYING for more details.
+# Copyright (c) 2006-2011, The libDAI authors. All rights reserved.
 #
-# Copyright (C) 2006-2010  Joris Mooij  [joris dot mooij at libdai dot org]
-# Copyright (C) 2006-2007  Radboud University Nijmegen, The Netherlands
+# Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
 
 # Load the platform independent build configuration file
@@ -15,8 +12,8 @@ include Makefile.ALL
 include Makefile.conf
 
 # Set version and date
-DAI_VERSION="0.2.7"
-DAI_DATE="August 19, 2010"
+DAI_VERSION="git HEAD"
+DAI_DATE="July 12, 2011 - or later"
 
 # Directories of libDAI sources
 # Location of libDAI headers
@@ -135,7 +132,7 @@ examples : $(EXAMPLES)
 matlabs : matlab/dai$(ME) matlab/dai_readfg$(ME) matlab/dai_writefg$(ME) matlab/dai_potstrength$(ME)
 
 unittests : tests/unit/var_test$(EE) tests/unit/smallset_test$(EE) tests/unit/varset_test$(EE) tests/unit/graph_test$(EE) tests/unit/dag_test$(EE) tests/unit/bipgraph_test$(EE) tests/unit/weightedgraph_test$(EE) tests/unit/enum_test$(EE) tests/unit/enum_test$(EE) tests/unit/util_test$(EE) tests/unit/exceptions_test$(EE) tests/unit/properties_test$(EE) tests/unit/index_test$(EE) tests/unit/prob_test$(EE) tests/unit/factor_test$(EE) tests/unit/factorgraph_test$(EE) tests/unit/clustergraph_test$(EE) tests/unit/regiongraph_test$(EE) tests/unit/daialg_test$(EE) tests/unit/alldai_test$(EE)
-	@echo 'Running unit tests...(note: output containing "EXCEPTION" does not indicate an error)'
+	@echo 'Running unit tests...'
 	@echo
 	tests/unit/var_test$(EE)
 	tests/unit/smallset_test$(EE)
@@ -310,7 +307,7 @@ endif
 doc : $(INC)/*.h $(SRC)/*.cpp examples/*.cpp doxygen.conf
 	doxygen doxygen.conf
 
-README : doc scripts/makeREADME
+README : doc scripts/makeREADME Makefile
 	DAI_VERSION=$(DAI_VERSION) DAI_DATE=$(DAI_DATE) scripts/makeREADME
 
 TAGS :

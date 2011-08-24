@@ -1,12 +1,8 @@
 /*  This file is part of libDAI - http://www.libdai.org/
  *
- *  libDAI is licensed under the terms of the GNU General Public License version
- *  2, or (at your option) any later version. libDAI is distributed without any
- *  warranty. See the file COPYING for more details.
+ *  Copyright (c) 2006-2011, The libDAI authors. All rights reserved.
  *
- *  Copyright (C) 2006-2010  Joris Mooij  [joris dot mooij at libdai dot org]
- *  Copyright (C) 2006-2007  Radboud University Nijmegen, The Netherlands
- *  Copyright (C) 2009       Sebastian Nowozin
+ *  Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
  */
 
 
@@ -93,10 +89,28 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray*prhs[] ) {
     obj->run();
 
     // Save logZ
-    double logZ = obj->logZ();
+	double logZ = NAN;
+    try {
+        logZ = obj->logZ();
+    }
+    catch( Exception &e ) {
+        if( e.getCode() == Exception::NOT_IMPLEMENTED )
+            mexWarnMsgTxt("Calculating the log-partition function is not supported by this inference algorithm.");
+        else
+            throw;
+    }
 
     // Save maxdiff
-    double maxdiff = obj->maxDiff();
+    double maxdiff = NAN; 
+    try {
+        maxdiff = obj->maxDiff();
+    }
+    catch( Exception &e ) {
+        if( e.getCode() == Exception::NOT_IMPLEMENTED )
+            mexWarnMsgTxt("Calculating the max-differences is not supported by this inference algorithm.");
+        else
+            throw;
+    }
 
     // Hand over results to MATLAB
     LOGZ_OUT = mxCreateDoubleMatrix(1,1,mxREAL);
@@ -129,7 +143,7 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray*prhs[] ) {
         try {
             map_state = obj->findMaximum();
         } catch( Exception &e ) {
-            if( e.code() == Exception::NOT_IMPLEMENTED )
+            if( e.getCode() == Exception::NOT_IMPLEMENTED )
                 supported = false;
             else
                 throw;
@@ -141,10 +155,11 @@ void mexFunction( int nlhs, mxArray *plhs[], int nrhs, const mxArray*prhs[] ) {
                 qmap_p[n] = map_state[n];
         } else {
             delete obj;
-            mexErrMsgTxt("Calculating a MAP state is not supported by this inference algorithm");
+            mexErrMsgTxt("Calculating a MAP state is not supported by this inference algorithm.");
         }
     }
 
     delete obj;
+
     return;
 }
