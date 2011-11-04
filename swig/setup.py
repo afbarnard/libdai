@@ -29,6 +29,10 @@ setup(name='dai',
             define_macros=[
                 ('DAI_WITH_JTREE', None),
                 ],
+            libraries=[
+                'gmpxx',
+                'gmp',
+                ]
             ),
             ],
       )

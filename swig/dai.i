@@ -29,16 +29,12 @@
  */
 
 /*
- * TODO handle dai::Exceptions
+ * TODO fix nrStates (now BigInt): TFactor, State, VarSet
+ * TODO fix overriding of existing methods (just switch order of %extend and %ignore?)
  * TODO make instantiated vector types module-private? e.g. "_VectorVar" not "VectorVar"
  * TODO enable TProb(Python sequence) constructor
  * TODO see if there is a way to define the Python enums in terms of the C++ enum values
  * TODO check that %newobject is applied where needed (and its relation to return by value)
- *
- * For Joris to fix:
- * TODO return type for VarSet::nrStates() should be size_t as it is for Factor
- * TODO improve exception handling: there should be a descriptive message and a source function/method, not just an error code, file, and line (which are unhelpful to Python users or anybody who doesn't want to read the source)
- * TODO create function listInfAlgs which lists the names of the available inference algorithms (this would basically be reverting commit 8aaf91cb3d63f92034fd7dc30669b635a4dbbe4d (2010-10-04 03:40:52) -- but do it in a better way?)
  */
 
 %module dai
@@ -333,6 +329,42 @@ class DaiException(Exception):
 }
 
 /****************************************
+ * BigInt
+ ****************************************
+ *
+ * Typemaps for Python long <-> BigInt.
+ *
+ * Applies to: BigInt VarSet.nrStates(), State(const VarSet &, BigInt),
+ * BigInt State::operator() (...), std::pair<size_t, BigInt>
+ * boundTreeWidth(...).
+ */
+
+// Check that the input argument is a Python primitive integer type
+//%typemap(typecheck) BigInt {
+
+//}
+
+// Convert a Python integer or long to a BigInt.
+//%typemap(in) dai::BigInt {
+//  $1 = ;
+//}
+
+/* Convert a BigInt to a Python long.  Python longs are arbitrary
+ * precision so there should not be a problem of truncation.  If the
+ * value is small enough just convert it to a long directly.  Otherwise
+ * convert it to a string first and have Python parse the string.
+ */
+%typemap(out) dai::BigInt {
+  if ($1.fits_slong_p()) {
+    $result = PyLong_FromLong($1.get_si());
+  } else {
+    char * stringRepr = mpz_get_str(NULL, 10, $1.get_mpz_t());
+    $result = PyLong_FromString(stringRepr, NULL, 10);
+    free(stringRepr);
+  }
+}
+
+/****************************************
  * Var
  ****************************************/
 
@@ -449,7 +481,7 @@ class DaiException(Exception):
 // Make SmallSet.size() return an integer
 %apply size_t { std::vector<dai::Var>::size_type };
 // Make VarSet.nrStates() return a float
-%apply double { long double };
+//%apply double { long double };
 
 /* The following template is needed for Swig to know about
  * SmallSet<Var>, but it does not need to be included in the API because
@@ -688,6 +720,8 @@ class DaiException(Exception):
 // Ignore mutators (accessors (const versions) are preserved)
 %ignore dai::InfAlg::fg;
 
+// TODO handle InfAlg.construct
+
 // Define class InfAlg, class DAIAlg
 %include <dai/daialg.h>
 
@@ -704,12 +738,14 @@ class DaiException(Exception):
 %newobject dai::newInfAlgFromString;
 
 /* Make sets of strings available to Python to enable an idiomatic
- * return value from listInfArgs.  Both of the includes (string, set)
- * and the template are necessary.
+ * return value from builtinInfAlgNames.  Both of the includes (string,
+ * set) and the template are necessary.
  */
 %include "std_string.i"
 %include "std_set.i"
 %template(SetString) std::set<std::string>;
+
+// TODO handle builtinInfAlgs()
 
 // Define functions listInfAlgs, newInfAlg*
 %include <dai/alldai.h>

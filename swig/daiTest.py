@@ -208,6 +208,8 @@ class VarSetTest(unittest.TestCase):
         self.sets = [
             dai.VarSet(dai.Var(0, 3), dai.Var(1, 2)),
             dai.VarSet([dai.Var(2, 4), dai.Var(3, 5), dai.Var(4, 6), dai.Var(5, 2)]),
+            # To stress test nrStates
+            dai.VarSet([dai.Var(6, 131071), dai.Var(7, 2199023255551), dai.Var(8, 127)])
             ]
 
     def tearDown(self):
@@ -226,8 +228,17 @@ class VarSetTest(unittest.TestCase):
         self.assertTrue(dai.Var(5, 2) in self.sets[1])
 
     def test_nrStates(self):
-        self.assertEqual(6, self.sets[0].nrStates())
-        self.assertEqual(240, self.sets[1].nrStates())
+        # Test that the typemap for BigInt returns a long as well as the
+        # correct value
+        actual = self.sets[0].nrStates()
+        self.assertEqual(long, type(actual))
+        self.assertEqual(6, actual)
+        actual = self.sets[1].nrStates()
+        self.assertEqual(long, type(actual))
+        self.assertEqual(240, actual)
+        actual = self.sets[2].nrStates()
+        self.assertEqual(long, type(actual))
+        self.assertEqual(36604978495297290367, actual)
 
 
 class ProbTest(unittest.TestCase):
