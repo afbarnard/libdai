@@ -339,29 +339,80 @@ class DaiException(Exception):
  * boundTreeWidth(...).
  */
 
-// Check that the input argument is a Python primitive integer type
-//%typemap(typecheck) BigInt {
-
-//}
-
-// Convert a Python integer or long to a BigInt.
-//%typemap(in) dai::BigInt {
-//  $1 = ;
-//}
+%{
+/* Convert a Python integer or long to a BigInt.  If the value is small
+ * enough just convert it to a BigInt directly (via long).  Otherwise
+ * convert it to a string first and create a BigInt from the string.
+ */
+static dai::BigInt * daiswig_pythonLong_to_bigInt(PyObject * numberObject) {
+  PyObject * pyLongRepr = PyNumber_Long(numberObject);  // as if "long(numberObject)"
+  if (!pyLongRepr) {
+      // Assemble the error message and throw an exception
+      snprintf(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE, "Failed to convert Python object to a Python long object.");
+      throw std::invalid_argument(std::string(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE));
+  }
+  long longRepr = PyLong_AsLong(pyLongRepr);
+  Py_DECREF(pyLongRepr);
+  // Check for an error.  If there was one, the value did not fit in a long, so use a string conversion.
+  if (longRepr == -1 && PyErr_Occurred()) {  // FIXME: Possible bug in ignoring the exception type
+    PyErr_Clear();
+    PyObject * pyStringRepr = PyObject_Str(numberObject);  // as if "str(numberObject)"
+    if (!pyStringRepr) {
+      // Assemble the error message and throw an exception
+      snprintf(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE, "Failed to convert Python integer object to a Python string object.");
+      throw std::runtime_error(std::string(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE));
+    }
+    // The pointer returned from the following call is internal to Python and should not be deallocated
+    char * stringRepr = PyString_AsString(pyStringRepr);
+    Py_DECREF(pyStringRepr);
+    if (!stringRepr) {
+      // Assemble the error message and throw an exception
+      snprintf(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE, "Failed to convert Python string object to a C string.");
+      throw std::runtime_error(std::string(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE));
+    }
+    // Create a BigInt from a string
+    return new dai::BigInt(stringRepr);
+  } else {
+    // Create a BigInt from a long
+    return new dai::BigInt(longRepr);
+  }
+}
 
 /* Convert a BigInt to a Python long.  Python longs are arbitrary
  * precision so there should not be a problem of truncation.  If the
  * value is small enough just convert it to a long directly.  Otherwise
  * convert it to a string first and have Python parse the string.
  */
-%typemap(out) dai::BigInt {
-  if ($1.fits_slong_p()) {
-    $result = PyLong_FromLong($1.get_si());
+static PyObject * daiswig_bigInt_to_pythonLong(const dai::BigInt & bigInt) {
+  if (bigInt.fits_slong_p()) {
+    return PyLong_FromLong(bigInt.get_si());
   } else {
-    char * stringRepr = mpz_get_str(NULL, 10, $1.get_mpz_t());
-    $result = PyLong_FromString(stringRepr, NULL, 10);
+    // 10 is the base of the integer in the following two calls
+    char * stringRepr = mpz_get_str(NULL, 10, bigInt.get_mpz_t());
+    PyObject * pythonLong = PyLong_FromString(stringRepr, NULL, 10);
     free(stringRepr);
+    return pythonLong;
   }
+}
+%}
+
+/* Typemap to check that the input argument is a Python primitive
+ * integer type.
+ */
+%typemap(typecheck) BigInt {
+  $1 = (PyInt_Check($input) || PyLong_Check($input)) ? 1 : 0;
+}
+
+/* Typemap to convert a Python integer or long to a BigInt.
+ */
+%typemap(in) dai::BigInt {
+  $1 = daiswig_pythonLong_to_bigInt($input);
+}
+
+/* Typemap to convert a BigInt to a Python long.
+ */
+%typemap(out) dai::BigInt {
+  $result = daiswig_bigInt_to_pythonLong($1);
 }
 
 /****************************************
@@ -480,8 +531,6 @@ class DaiException(Exception):
 
 // Make SmallSet.size() return an integer
 %apply size_t { std::vector<dai::Var>::size_type };
-// Make VarSet.nrStates() return a float
-//%apply double { long double };
 
 /* The following template is needed for Swig to know about
  * SmallSet<Var>, but it does not need to be included in the API because
