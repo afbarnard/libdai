@@ -29,8 +29,7 @@
  */
 
 /*
- * TODO fix nrStates (now BigInt): TFactor, State, VarSet
- * TODO fix overriding of existing methods (just switch order of %extend and %ignore?)
+ * TODO test BigInt in-typemap (TFactor, State, VarSet)
  * TODO make instantiated vector types module-private? e.g. "_VectorVar" not "VectorVar"
  * TODO enable TProb(Python sequence) constructor
  * TODO see if there is a way to define the Python enums in terms of the C++ enum values
@@ -304,12 +303,12 @@ static void daiswig_handleException(std::exception & exception) {
  ****************************************
  *
  * Most of the contents of util.h aren't appropriate for inclusion into
- * the API.  Just import it and manually (re)define the bits that are
- * important to the API.
+ * the API.  Just import it (rather than include it) and manually
+ * (re)define the bits that are important to the API.
  *
- * Manually mirror exceptions.h because it will provide more idiomatic
- * funcionality (no checking of codes, unified conversion of C++
- * exceptions to Python exceptions).
+ * Manually mirror the classes in exceptions.h because it will provide
+ * more idiomatic funcionality (no checking of codes, unified conversion
+ * of C++ exceptions to Python exceptions).
  */
 
 %import <dai/util.h>
@@ -577,22 +576,15 @@ static PyObject * daiswig_bigInt_to_pythonLong(const dai::BigInt & bigInt) {
 %ignore dai::TProb::pwBinaryTr;
 %ignore dai::TProb::pwBinaryOp;
 
-// Ignore get/set so they can be redefined with memory-safe versions
-%ignore dai::TProb::get;
-%ignore dai::TProb::set;
-
-// Define class TProb
-%include <dai/prob.h>
-
 %extend dai::TProb {
   /* Replace get/set with memory-safe versions.  It would be nice to be
    * able to just redefine get/set in terms of std::vector::at but _p is
    * private so we have to do things ourselves (the extensions appear in
    * the scope of the API, not in the scope of the original C++ class).
-   * Don't name them with leading underscores or the Python help system
-   * will ignore them.
+   * Use ssize_t instead of the original size_t so that any Python
+   * integer can be passed in.
    */
-  T get_(ssize_t index) const throw (std::out_of_range) {
+  T get(ssize_t index) const throw (std::out_of_range) {
     if (index < 0 || index >= (ssize_t) $self->size()) {
       // Assemble the error message
       snprintf(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE, "Index out of range: %zd", index);
@@ -601,7 +593,7 @@ static PyObject * daiswig_bigInt_to_pythonLong(const dai::BigInt & bigInt) {
     return $self->get(index);
   }
 
-  void set_(ssize_t index, T value) throw (std::out_of_range) {
+  void set(ssize_t index, T value) throw (std::out_of_range) {
     if (index < 0 || index >= (ssize_t) $self->size()) {
       // Assemble the error message
       snprintf(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE, "Index out of range: %zd", index);
@@ -611,21 +603,28 @@ static PyObject * daiswig_bigInt_to_pythonLong(const dai::BigInt & bigInt) {
   }
 
   /* Make operator[] available to Python as a convenience.  Define
-   * get/set to call the memory-safe versions.  Define __len__ for
-   * idiomatic behavior.
+   * __len__ for idiomatic behavior.
    */
   %pythoncode {
     def __getitem__(self, index):
-        return self.get_(index)
+        return self.get(index)
 
     def __setitem__(self, index, value):
-        self.set_(index, value)
+        self.set(index, value)
 
     __len__ = size
-    get = get_
-    set = set_
   }
 }
+
+/* Ignore get/set so they can be redefined with memory-safe versions.
+ * The ignore has to occur after the extend for this to work without
+ * renaming.
+ */
+%ignore dai::TProb::get;
+%ignore dai::TProb::set;
+
+// Define class TProb
+%include <dai/prob.h>
 
 /* Instantiate std::vector<double> to enable the TProb(const
  * std::vector<S> & v) constructor which will, in turn, enable TProb to
@@ -656,17 +655,10 @@ static PyObject * daiswig_bigInt_to_pythonLong(const dai::BigInt & bigInt) {
 %ignore dai::TFactor::binaryOp;
 %ignore dai::TFactor::binaryTr;
 
-// Ignore get/set so they can be redefined with memory-safe versions
-%ignore dai::TFactor::get;
-%ignore dai::TFactor::set;
-
-// Define class TFactor
-%include <dai/factor.h>
-
 %extend dai::TFactor {
   /* Replace get/set with memory-safe versions as for TProb.
    */
-  T get_(ssize_t index) const throw (std::out_of_range) {
+  T get(ssize_t index) const throw (std::out_of_range) {
     if (index < 0 || index >= (ssize_t) $self->nrStates()) {
       // Assemble the error message
       snprintf(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE, "Index out of range: %zd", index);
@@ -675,7 +667,7 @@ static PyObject * daiswig_bigInt_to_pythonLong(const dai::BigInt & bigInt) {
     return $self->get(index);
   }
 
-  void set_(ssize_t index, T value) throw (std::out_of_range) {
+  void set(ssize_t index, T value) throw (std::out_of_range) {
     if (index < 0 || index >= (ssize_t) $self->nrStates()) {
       // Assemble the error message
       snprintf(daiswig_error_message, DAISWIG_ERROR_MESSAGE_MAX_SIZE, "Index out of range: %zd", index);
@@ -685,21 +677,28 @@ static PyObject * daiswig_bigInt_to_pythonLong(const dai::BigInt & bigInt) {
   }
 
   /* Make operator[] available to Python as a convenience.  Define
-   * get/set to call the memory-safe versions.  Define __len__ for
-   * idiomatic behavior.
+   * __len__ for idiomatic behavior.
    */
   %pythoncode {
     def __getitem__(self, index):
-        return self.get_(index)
+        return self.get(index)
 
     def __setitem__(self, index, value):
-        self.set_(index, value)
+        self.set(index, value)
 
     __len__ = nrStates
-    get = get_
-    set = set_
   }
 }
+
+/* Ignore get/set so they can be redefined with memory-safe versions.
+ * The ignore has to occur after the extend for this to work without
+ * renaming.
+ */
+%ignore dai::TFactor::get;
+%ignore dai::TFactor::set;
+
+// Define class TFactor
+%include <dai/factor.h>
 
 // Instantiate TFactor for use with floating point numbers (includes it in the API)
 %template(Factor) dai::TFactor<dai::Real>;
