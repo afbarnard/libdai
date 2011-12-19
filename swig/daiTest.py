@@ -745,3 +745,112 @@ class FactorTest(unittest.TestCase):
         max11 = max(FactorTest.weights[state[0] + state[1] * 2 + state[2] * 3 * 2] for state in states)
         expected = (max00, max10, max01, max11)
         self.assertEqual(expected, actual.p().p())
+
+
+class GraphAlTest(unittest.TestCase):
+    """Tests GraphAL and accompanying: Neighbor, Neighbors, Edge."""
+
+    def setUp(self):
+        self.graph = dai.GraphAL(4)
+        self.graph.addEdge(0, 1)
+        self.graph.addEdge(1, 2)
+        self.graph.addEdge(2, 0)
+        self.graph.addEdge(2, 3)
+        self.graph.addEdge(3, 0)
+
+    def test_nrNodes(self):
+        self.assertEqual(4, self.graph.nrNodes())
+
+    def test_nrEdges(self):
+        self.assertEqual(5, self.graph.nrEdges())
+
+    def test_hasEdge(self):
+        self.assertTrue(self.graph.hasEdge(1, 0))
+        self.assertFalse(self.graph.hasEdge(3, 1))
+
+    def test_isConnected(self):
+        self.assertTrue(self.graph.isConnected())
+        self.assertFalse(dai.GraphAL(2).isConnected())
+
+    def test_isTree(self):
+        self.assertFalse(self.graph.isTree())
+        self.assertTrue(dai.GraphAL(1).isTree())
+
+    def test_findNb(self):
+        self.assertEqual(0, self.graph.findNb(2, 1))
+        self.assertEqual(2, self.graph.findNb(0, 3))
+
+    def test_nbSet(self):
+        self.assertEqual(dai.SmallSetSizet([1, 2, 3]), self.graph.nbSet(0))
+        self.assertEqual(dai.SmallSetSizet([0, 2]), self.graph.nbSet(3))
+
+    def test_nb_1Arg(self):
+        getNode = lambda neighbor: neighbor.node
+        neighbors = self.graph.nb(0)
+        self.assertEqual([1, 2, 3], map(getNode, neighbors))
+        neighbors = self.graph.nb(1)
+        self.assertEqual([0, 2], map(getNode, neighbors))
+        neighbors = self.graph.nb(2)
+        self.assertEqual([1, 0, 3], map(getNode, neighbors))
+        neighbors = self.graph.nb(3)
+        self.assertEqual([2, 0], map(getNode, neighbors))
+
+    def test_nb_2Arg(self):
+        for index, neighbor in enumerate([1, 0, 3]):
+            self.assertEqual(neighbor, self.graph.nb(2, index).node)
+
+    def test___eq__(self):
+        """operator=="""
+        self.assertTrue(self.graph == self.graph)
+        self.assertFalse(self.graph == dai.GraphAL())
+
+    def test_addNode(self):
+        numberNodes = self.graph.nrNodes()
+        numberEdges = self.graph.nrEdges()
+        newNodeId = self.graph.addNode()
+        self.assertEqual(numberNodes, newNodeId)
+        self.assertEqual(numberNodes + 1, self.graph.nrNodes())
+        self.assertEqual(numberEdges, self.graph.nrEdges())
+
+    def test_eraseNode(self):
+        self.graph.eraseNode(2)
+        expected = dai.GraphAL(3)
+        expected.addEdge(0, 1).addEdge(0, 2)
+        self.assertEqual(expected, self.graph)
+
+    def test_eraseEdge(self):
+        numberNodes = self.graph.nrNodes()
+        numberEdges = self.graph.nrEdges()
+        self.assertTrue(self.graph.hasEdge(2, 3))
+        self.graph.eraseEdge(2, 3)
+        self.assertFalse(self.graph.hasEdge(2, 3))
+        self.assertEqual(numberNodes, self.graph.nrNodes())
+        self.assertEqual(numberEdges - 1, self.graph.nrEdges())
+
+
+class BipartiteGraphTest(unittest.TestCase):
+    pass
+
+
+class FactorGraphTest(unittest.TestCase):
+    pass
+
+
+class PropertyTest(unittest.TestCase):
+    pass
+
+
+class PropertySetTest(unittest.TestCase):
+    pass
+
+
+class InfAlgTest(unittest.TestCase):
+    pass
+
+
+class DaiAlgTest(unittest.TestCase):
+    pass
+
+
+class AllDaiTest(unittest.TestCase):
+    pass

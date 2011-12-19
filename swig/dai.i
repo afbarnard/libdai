@@ -709,11 +709,18 @@ static PyObject * daiswig_bigInt_to_pythonLong(const dai::BigInt & bigInt) {
 
 // Ignore casting operators
 %ignore dai::Neighbor::operator size_t;
-// Ignore mutators (accessors (const versions) are preserved)
-%ignore dai::GraphAL::nb;
+/* Ignore mutators (accessors (const versions) are preserved).  Just
+ * ignoring "nb" ignores all four versions, so I evidently have to
+ * specify overloaded methods individually to keep their const versions.
+ */
+%ignore dai::GraphAL::nb(size_t,size_t);
+%ignore dai::GraphAL::nb(size_t);
 
 // Define struct Neighbor, type Neighbors, type Edge, class GraphAL
 %include <dai/graph.h>
+
+// Instantiate a vector of Neighbor
+%template(VectorNeighbor) std::vector<dai::Neighbor>;
 
 /****************************************
  * BipartiteGraph
